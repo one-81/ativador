@@ -19,6 +19,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Aceitar Licenças e Configurar SDK
+        run: |
+          yes | sdkmanager --licenses || true
+          echo "sdk.dir=$ANDROID_HOME" > projeto_app_ativador/local.properties
+
+      - name: Ajustar Manifesto (Remover icone ausente)
+        run: |
+          sed -i '/android:icon/d' projeto_app_ativador/app/src/main/AndroidManifest.xml
+          sed -i '/android:roundIcon/d' projeto_app_ativador/app/src/main/AndroidManifest.xml
+
       - name: Instalar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
