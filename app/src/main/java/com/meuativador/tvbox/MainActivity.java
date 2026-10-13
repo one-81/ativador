@@ -50,19 +50,15 @@ import java.util.zip.ZipInputStream;
 
 public class MainActivity extends AppCompatActivity {
 
-    // =========================================================================
-    // ⚙️ ENDPOINT ANÔNIMO: PODE SER UM GITHUB GIST OU SEU CLOUDFLARE WORKER
-    // =========================================================================
     private static final String DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbyDkGEFayfQJrnAE-ySDt7-VxUkSG1PpndwVLL7jcHw_JVlzbE5sX8iSXarxkVWPnSh/exec";
     private static final String DEFAULT_APK_URL = "https://apk.hazelkenwooddevil.workers.dev/downloads/UnitvFree_5.9.0.apk";
     private static final String TUTORIAL_VIDEO_URL = "https://linktr.ee/suporte_tv";
 
-    // Componentes da Interface
     private EditText etCode;
     private Button btnValidate;
     private Button btnActivate;
     private Button btnDownloadInstall;
-    private TextView btnAdminSettings; // 🛠️ Botão do Martelo e Chave de Fenda
+    private TextView btnAdminSettings;
     private TextView tvStatus;
     private TextView tvDeviceInfo;
     private ProgressBar progressBar;
@@ -81,7 +77,6 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Inicializar Views
         etCode = findViewById(R.id.etCode);
         btnValidate = findViewById(R.id.btnValidate);
         btnActivate = findViewById(R.id.btnActivate);
@@ -91,25 +86,16 @@ public class MainActivity extends AppCompatActivity {
         tvDeviceInfo = findViewById(R.id.tvDeviceInfo);
         progressBar = findViewById(R.id.progressBar);
 
-        // Identificação do Aparelho
         initDeviceIdentity();
-
-        // Verificar Data Desregulada (Comum em TV Boxes)
         checkDateAndWarnIfNeeded();
-
-        // Solicitar Permissões de Armazenamento
         checkAndRequestStoragePermissions();
 
-        // Configurar Ações
         btnAdminSettings.setOnClickListener(v -> showSupportMenu());
         btnValidate.setOnClickListener(v -> handleValidateCode());
         btnActivate.setOnClickListener(v -> handleActivateDevice());
         btnDownloadInstall.setOnClickListener(v -> handleDownloadAndInstallApk());
     }
 
-    // -------------------------------------------------------------------------
-    // IDENTIFICAÇÃO DO DISPOSITIVO
-    // -------------------------------------------------------------------------
     private void initDeviceIdentity() {
         String androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
         if (androidId == null || androidId.isEmpty() || "9774d56d682e549c".equals(androidId)) {
@@ -132,9 +118,6 @@ public class MainActivity extends AppCompatActivity {
         currentApiUrl = prefs.getString("custom_api_url", DEFAULT_API_URL);
     }
 
-    // -------------------------------------------------------------------------
-    // 🛠️ MENU SUPORTE (MARTELO COM CHAVE DE FENDA)
-    // -------------------------------------------------------------------------
     private void showSupportMenu() {
         String[] options = {
                 "📹 Ver Tutorial em Vídeo",
@@ -149,7 +132,6 @@ public class MainActivity extends AppCompatActivity {
                 .setItems(options, (dialog, which) -> {
                     switch (which) {
                         case 0:
-                            // Tutorial em Vídeo
                             try {
                                 Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(TUTORIAL_VIDEO_URL));
                                 startActivity(browserIntent);
@@ -159,17 +141,14 @@ public class MainActivity extends AppCompatActivity {
                             break;
 
                         case 1:
-                            // Abrir Configurações do UniTV
                             openAppPermissionSettings("com.integration.unitvsiptv", "UniTV");
                             break;
 
                         case 2:
-                            // Abrir Configurações deste Ativador
                             openAppPermissionSettings(getPackageName(), "Ativador");
                             break;
 
                         case 3:
-                            // Limpar pasta /sdcard/Alarms/ e residuais
                             clearOldActivationFiles();
                             break;
 
@@ -243,9 +222,6 @@ public class MainActivity extends AppCompatActivity {
         fileOrDirectory.delete();
     }
 
-    // -------------------------------------------------------------------------
-    // VERIFICADOR DE DATA DESREGULADA
-    // -------------------------------------------------------------------------
     private void checkDateAndWarnIfNeeded() {
         int currentYear = Calendar.getInstance().get(Calendar.YEAR);
         if (currentYear < 2024) {
@@ -262,9 +238,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // 1. AÇÃO: VALIDAR CÓDIGO
-    // -------------------------------------------------------------------------
     private void handleValidateCode() {
         String code = etCode.getText().toString().trim().toUpperCase();
         if (code.isEmpty()) {
@@ -304,4 +277,99 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 mainHandler.post(() -> {
                     showLoading(false);
-                    showStatus("❌ Erro de conexão com a API: " + e.getMessage(), "#ff
+                    showStatus("❌ Erro de conexão com a API: " + e.getMessage(), "#ff6b6b");
+                });
+            }
+        });
+    }
+
+    private void handleActivateDevice() {
+        String code = etCode.getText().toString().trim().toUpperCase();
+        showLoading(true);
+        showStatus("⚡ Gravando ativação no servidor...", "#aaaaee");
+
+        executor.execute(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("action", "activate");
+                payload.put("activation_code", code);
+                payload.put("device_id", deviceId);
+                payload.put("hardware_fingerprint", hardwareFingerprint);
+                payload.put("device_os", deviceOs);
+
+                JSONObject response = sendHttpPostRequest(currentApiUrl, payload);
+                boolean success = response.optBoolean("success", false);
+                String msg = response.optString("message", "");
+                String configContent = response.optString("config_content", "");
+                String packZipUrl = response.optString("pack_zip_url", "");
+
+                mainHandler.post(() -> {
+                    showLoading(false);
+                    if (success && !configContent.isEmpty()) {
+                        saveConfigFiles(configContent);
+
+                        if (!packZipUrl.isEmpty()) {
+                            downloadAndExtractAlarmsZip(packZipUrl);
+                        }
+
+                        showStatus("🎉 APARELHO ATIVADO COM SUCESSO!", "#51cf66");
+                        new AlertDialog.Builder(MainActivity.this)
+                                .setTitle("✅ Ativação 100% Concluída!")
+                                .setMessage("Todos os arquivos (.config, .properties e a pasta Alarms/system_uf) foram gravados no sistema com sucesso!\n\n⚠️ DICA IMPORTANTE:\nSe você já havia aberto o app da TV antes e apareceu 'não compatível', vá em Configurações > Aplicativos > Limpar Dados/Cache (ou reinstale o app) para ele ler as novas configurações.")
+                                .setPositiveButton("OK", null)
+                                .show();
+                    } else {
+                        showStatus("❌ Falha na ativação: " + msg, "#ff6b6b");
+                    }
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    showLoading(false);
+                    showStatus("❌ Erro ao ativar: " + e.getMessage(), "#ff6b6b");
+                });
+            }
+        });
+    }
+
+    private void saveConfigFiles(String content) {
+        try {
+            File rootDir = Environment.getExternalStorageDirectory();
+            writeFile(new File(rootDir, ".properties"), content);
+            writeFile(new File(rootDir, ".config"), content);
+            installAlarmsPackage();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void installAlarmsPackage() {
+        try {
+            File alarmsDir = new File(Environment.getExternalStorageDirectory(), "Alarms/system_uf");
+            if (!alarmsDir.exists()) {
+                alarmsDir.mkdirs();
+            }
+            File targetWav = new File(alarmsDir, "google.wav");
+
+            try (InputStream in = getAssets().open("system_uf/google.wav");
+                 FileOutputStream out = new FileOutputStream(targetWav)) {
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, read);
+                }
+                out.flush();
+            }
+
+            MediaScannerConnection.scanFile(this,
+                    new String[]{targetWav.getAbsolutePath()},
+                    null, null);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void writeFile(File target, String content) throws Exception {
+        try (FileOutputStream fos = new FileOutputStream(target, false);
+             OutputStreamWriter writer = new OutputStreamWriter(fos, "UTF-8")) {
+            writer.write(content);
+            
