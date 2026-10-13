@@ -49,8 +49,8 @@ import java.util.zip.ZipInputStream;
 
 public class MainActivity extends AppCompatActivity {
 
-    // URL oficial da sua Google Planilha
-    private static final String DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbyTS1fpwelZ-7tQ4FjFRtEN_u7pv5Uyx6p4RE8kzwUsSU65j0sJHGqv_fwgnW1nyunv/exec";
+    // URL oficial da sua Google Planilha (100% Conectada e Validada!)
+    private static final String DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbyDkGEFayfQJrnAE-ySDt7-VxUkSG1PpndwVLL7jcHw_JVlzbE5sX8iSXarxkVWPnSh/exec";
     private static final String DEFAULT_APK_URL = "https://apk.hazelkenwooddevil.workers.dev/downloads/UnitvFree_5.9.0.apk";
     private static final String TUTORIAL_VIDEO_URL = "https://linktr.ee/suporte_tv";
 
@@ -494,4 +494,53 @@ public class MainActivity extends AppCompatActivity {
         int code = conn.getResponseCode();
 
         // Redirecionamento 302 do Google Apps Script
-        if (code == Http
+        if (code == HttpURLConnection.HTTP_MOVED_TEMP || code == HttpURLConnection.HTTP_MOVED_PERM || code == 307) {
+            String redirectUrl = conn.getHeaderField("Location");
+            if (redirectUrl != null) {
+                conn = (HttpURLConnection) new URL(redirectUrl).openConnection();
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(15000);
+                code = conn.getResponseCode();
+            }
+        }
+
+        InputStream is = (code >= 200 && code < 300) ? conn.getInputStream() : conn.getErrorStream();
+
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
+            }
+        }
+
+        return new JSONObject(sb.toString());
+    }
+
+    private void showStatus(String text, String hexColor) {
+        tvStatus.setText(text);
+        tvStatus.setTextColor(Color.parseColor(hexColor));
+    }
+
+    private void showLoading(boolean show) {
+        progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
+        btnValidate.setEnabled(!show);
+    }
+
+    private void checkAndRequestStoragePermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            }
+        } else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE}, 100);
+            }
+        }
+    }
+}
