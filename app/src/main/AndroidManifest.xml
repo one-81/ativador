@@ -22,7 +22,7 @@
         android:allowBackup="true"
         android:label="Ativador TVBox"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.NoActionBar"
+        android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true">
 
@@ -52,3 +52,4 @@
     </application>
 
 </manifest>
+
