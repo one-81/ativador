@@ -19,6 +19,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Corrigir Recursos e Layout
+        run: |
+          sed -i 's/android:layout_maxWidth="520dp"//g' app/src/main/res/layout/activity_main.xml
+          sed -i 's/name="Theme.AppCompat.NoActionBar"/name="AppTheme"/g' app/src/main/res/values/styles.xml
+          sed -i 's/@style\/Theme.AppCompat.NoActionBar/@style\/AppTheme/g' app/src/main/AndroidManifest.xml
+
       - name: Instalar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
