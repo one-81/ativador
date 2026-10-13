@@ -19,19 +19,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Configurar Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Aceitar Licenças e Configurar SDK
-        run: |
-          yes | sdkmanager --licenses || true
-          echo "sdk.dir=$ANDROID_HOME" > projeto_app_ativador/local.properties
-
-      - name: Ajustar Manifesto (Remover icone ausente)
-        run: |
-          sed -i '/android:icon/d' projeto_app_ativador/app/src/main/AndroidManifest.xml
-          sed -i '/android:roundIcon/d' projeto_app_ativador/app/src/main/AndroidManifest.xml
-
       - name: Instalar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -39,11 +26,10 @@ jobs:
 
       - name: Compilar APK
         run: |
-          cd projeto_app_ativador
           gradle assembleDebug --stacktrace
 
       - name: Salvar APK Pronto
         uses: actions/upload-artifact@v4
         with:
           name: Ativador-TVBox-APK
-          path: projeto_app_ativador/app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/*.apk
