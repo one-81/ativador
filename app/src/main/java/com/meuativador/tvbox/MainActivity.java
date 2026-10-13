@@ -49,12 +49,8 @@ import java.util.zip.ZipInputStream;
 
 public class MainActivity extends AppCompatActivity {
 
-    // =========================================================================
-    // ⚙️ ENDPOINT ANÔNIMO: PODE SER UM GITHUB GIST OU SEU CLOUDFLARE WORKER
-    // =========================================================================
-    // Você pode colocar um link de um raw.githubusercontent.com aqui
-    // Assim ninguém sabe onde o seu site original fica hospedado!
-    private static final String DEFAULT_API_URL = "https://apk.hazelkenwooddevil.workers.dev/revenda/api/validate.php";
+    // URL oficial da sua Google Planilha
+    private static final String DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbyTS1fpwelZ-7tQ4FjFRtEN_u7pv5Uyx6p4RE8kzwUsSU65j0sJHGqv_fwgnW1nyunv/exec";
     private static final String DEFAULT_APK_URL = "https://apk.hazelkenwooddevil.workers.dev/downloads/UnitvFree_5.9.0.apk";
     private static final String TUTORIAL_VIDEO_URL = "https://linktr.ee/suporte_tv";
 
@@ -108,9 +104,6 @@ public class MainActivity extends AppCompatActivity {
         btnDownloadInstall.setOnClickListener(v -> handleDownloadAndInstallApk());
     }
 
-    // -------------------------------------------------------------------------
-    // IDENTIFICAÇÃO DO DISPOSITIVO
-    // -------------------------------------------------------------------------
     private void initDeviceIdentity() {
         String androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
         if (androidId == null || androidId.isEmpty() || "9774d56d682e549c".equals(androidId)) {
@@ -128,6 +121,9 @@ public class MainActivity extends AppCompatActivity {
         deviceOs = "Android " + Build.VERSION.RELEASE + " (SDK " + Build.VERSION.SDK_INT + ")";
 
         tvDeviceInfo.setText("Aparelho: " + Build.MODEL + " | ID: " + deviceId.substring(0, Math.min(8, deviceId.length())) + "...");
+
+        SharedPreferences prefs = getSharedPreferences("TVBoxPrefs", Context.MODE_PRIVATE);
+        currentApiUrl = prefs.getString("custom_api_url", DEFAULT_API_URL);
     }
 
     // -------------------------------------------------------------------------
@@ -138,7 +134,8 @@ public class MainActivity extends AppCompatActivity {
                 "📹 Ver Tutorial em Vídeo",
                 "📱 UniTV (Dar Permissões Ficheiros/Multimédia)",
                 "⚙️ Ativador (Dar Permissões Ficheiros/Multimédia)",
-                "🧹 Limpar Arquivos de Ativação Antiga"
+                "🧹 Limpar Arquivos de Ativação Antiga",
+                "🔗 Configurar URL da Planilha Google"
         };
 
         new AlertDialog.Builder(this)
@@ -146,7 +143,6 @@ public class MainActivity extends AppCompatActivity {
                 .setItems(options, (dialog, which) -> {
                     switch (which) {
                         case 0:
-                            // Tutorial em Vídeo
                             try {
                                 Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(TUTORIAL_VIDEO_URL));
                                 startActivity(browserIntent);
@@ -156,22 +152,44 @@ public class MainActivity extends AppCompatActivity {
                             break;
 
                         case 1:
-                            // Abrir Configurações do UniTV
                             openAppPermissionSettings("com.integration.unitvsiptv", "UniTV");
                             break;
 
                         case 2:
-                            // Abrir Configurações deste Ativador
                             openAppPermissionSettings(getPackageName(), "Ativador");
                             break;
 
                         case 3:
-                            // Limpar pasta /sdcard/Alarms/ e residuais
                             clearOldActivationFiles();
+                            break;
+
+                        case 4:
+                            showChangeApiUrlDialog();
                             break;
                     }
                 })
                 .setNegativeButton("FECHAR", null)
+                .show();
+    }
+
+    private void showChangeApiUrlDialog() {
+        final EditText input = new EditText(this);
+        input.setText(currentApiUrl);
+        input.setPadding(30, 20, 30, 20);
+        new AlertDialog.Builder(this)
+                .setTitle("🔗 URL da Planilha Google")
+                .setMessage("Cole o link gerado pelo Google Apps Script:")
+                .setView(input)
+                .setPositiveButton("SALVAR", (d, w) -> {
+                    String newUrl = input.getText().toString().trim();
+                    if (!newUrl.isEmpty()) {
+                        currentApiUrl = newUrl;
+                        getSharedPreferences("TVBoxPrefs", Context.MODE_PRIVATE)
+                                .edit().putString("custom_api_url", newUrl).apply();
+                        Toast.makeText(this, "URL da API atualizada!", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("CANCELAR", null)
                 .show();
     }
 
@@ -215,9 +233,6 @@ public class MainActivity extends AppCompatActivity {
         fileOrDirectory.delete();
     }
 
-    // -------------------------------------------------------------------------
-    // VERIFICADOR DE DATA DESREGULADA
-    // -------------------------------------------------------------------------
     private void checkDateAndWarnIfNeeded() {
         int currentYear = Calendar.getInstance().get(Calendar.YEAR);
         if (currentYear < 2024) {
@@ -234,9 +249,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // 1. AÇÃO: VALIDAR CÓDIGO
-    // -------------------------------------------------------------------------
     private void handleValidateCode() {
         String code = etCode.getText().toString().trim().toUpperCase();
         if (code.isEmpty()) {
@@ -245,7 +257,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         showLoading(true);
-        showStatus("🔍 Consultando servidor...", "#aaaaee");
+        showStatus("🔍 Consultando planilha...", "#aaaaee");
 
         executor.execute(() -> {
             try {
@@ -276,19 +288,16 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 mainHandler.post(() -> {
                     showLoading(false);
-                    showStatus("❌ Erro de conexão com a API: " + e.getMessage(), "#ff6b6b");
+                    showStatus("❌ Erro de conexão com a planilha: " + e.getMessage(), "#ff6b6b");
                 });
             }
         });
     }
 
-    // -------------------------------------------------------------------------
-    // 2. AÇÃO: ATIVAR APARELHO (GRAVA .CONFIG E EXTRAI ALARMS)
-    // -------------------------------------------------------------------------
     private void handleActivateDevice() {
         String code = etCode.getText().toString().trim().toUpperCase();
         showLoading(true);
-        showStatus("⚡ Gravando ativação no servidor...", "#aaaaee");
+        showStatus("⚡ Gravando ativação na planilha...", "#aaaaee");
 
         executor.execute(() -> {
             try {
@@ -308,10 +317,8 @@ public class MainActivity extends AppCompatActivity {
                 mainHandler.post(() -> {
                     showLoading(false);
                     if (success && !configContent.isEmpty()) {
-                        // 1. Grava os arquivos ocultos de texto (.config e .properties)
                         saveConfigFiles(configContent);
 
-                        // 2. Se o servidor mandou o zip de pacotes, extrai para /sdcard/Alarms/
                         if (!packZipUrl.isEmpty()) {
                             downloadAndExtractAlarmsZip(packZipUrl);
                         }
@@ -335,9 +342,6 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    // -------------------------------------------------------------------------
-    // GRAVAÇÃO DOS ARQUIVOS (.config / .properties)
-    // -------------------------------------------------------------------------
     private void saveConfigFiles(String content) {
         try {
             File rootDir = Environment.getExternalStorageDirectory();
@@ -367,9 +371,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // DOWNLOAD E EXTRAÇÃO PARA A PASTA /sdcard/Alarms/
-    // -------------------------------------------------------------------------
     private void downloadAndExtractAlarmsZip(String zipUrl) {
         executor.execute(() -> {
             try {
@@ -387,7 +388,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
 
-                // Extrair dentro de /sdcard/Alarms/
                 File alarmsDir = new File(Environment.getExternalStorageDirectory(), "Alarms");
                 if (alarmsDir.exists()) {
                     deleteRecursive(alarmsDir);
@@ -422,9 +422,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // 3. AÇÃO: BAIXAR E INSTALAR APK AUTOMATICAMENTE
-    // -------------------------------------------------------------------------
     private void handleDownloadAndInstallApk() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!getPackageManager().canRequestPackageInstalls()) {
@@ -479,9 +476,6 @@ public class MainActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
-    // -------------------------------------------------------------------------
-    // REQUISIÇÃO HTTP POST (COM SUPORTE A REDIRECIONAMENTOS DO GOOGLE SHEETS)
-    // -------------------------------------------------------------------------
     private JSONObject sendHttpPostRequest(String endpoint, JSONObject jsonBody) throws Exception {
         URL url = new URL(endpoint);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -499,57 +493,5 @@ public class MainActivity extends AppCompatActivity {
 
         int code = conn.getResponseCode();
 
-        // Tratamento de redirecionamento 302 do Google Apps Script
-        if (code == HttpURLConnection.HTTP_MOVED_TEMP || code == HttpURLConnection.HTTP_MOVED_PERM || code == 307) {
-            String redirectUrl = conn.getHeaderField("Location");
-            if (redirectUrl != null) {
-                conn = (HttpURLConnection) new URL(redirectUrl).openConnection();
-                conn.setRequestProperty("Accept", "application/json");
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(15000);
-                code = conn.getResponseCode();
-            }
-        }
-
-        InputStream is = (code >= 200 && code < 300) ? conn.getInputStream() : conn.getErrorStream();
-
-        StringBuilder sb = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line);
-            }
-        }
-
-        return new JSONObject(sb.toString());
-    }
-
-    // -------------------------------------------------------------------------
-    // UTILITÁRIOS
-    // -------------------------------------------------------------------------
-    private void showStatus(String text, String hexColor) {
-        tvStatus.setText(text);
-        tvStatus.setTextColor(Color.parseColor(hexColor));
-    }
-
-    private void showLoading(boolean show) {
-        progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
-        btnValidate.setEnabled(!show);
-    }
-
-    private void checkAndRequestStoragePermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-                intent.setData(Uri.parse("package:" + getPackageName()));
-                startActivity(intent);
-            }
-        } else {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this,
-                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE}, 100);
-            }
-        }
-    }
-}
+        // Redirecionamento 302 do Google Apps Script
+        if (code == Http
